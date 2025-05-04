@@ -1,10 +1,9 @@
-
-//A- edit Date
-//B- edit time
-//* - back/reset (if in edit date/time mode resets it to 00/00/0000 or 00:00:00)
-//#- conform (takes back to 'clock')
-//D- AM/Pm -> Military (vice versa)
-
+// A - Enter date mode (MM/DD/YYY)
+// B - Enter time mode
+// C - Backspace
+// D - Toggle military time
+// * - Cancel edit and return to RUN (no changes)
+// # - Confirm edit and return to RUN
 
 #include "avr.h"
 #include "lcd.h"
@@ -18,7 +17,32 @@
 #define EN_PIN 2
 
 
-static const char MAP[4][4] = {
+/*** data structures and helpers ***/
+typedef struct 
+{
+    int year;   
+    uint8_t month, day; // 1–12, 1–31
+    uint8_t hour, minute, second;   // 0–23, 0–59, 0–59
+} DateTime;
+
+
+static bool is_leap(int y) 
+{
+    return (y%4==0 && y%100!=0) || (y%400==0);
+}
+
+
+static uint8_t days_in_month(uint8_t m, int y) 
+{
+    static const uint8_t MONTH_DAYS[12] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    if (m==2 && is_leap(y)) return 29;
+    return MONTH_DAYS[m-1];
+}
+
+
+/*** keypad helpers ***/
+static const char MAP[4][4] = 
+{
     {"1","2","3","A"},
     {"4","5","6","B"},
     {"7","8","9","C"},
@@ -28,68 +52,64 @@ static const char MAP[4][4] = {
 
 void keypad_init(void)
 {
-    DDRC = 0;	//PC0-3 outputs (rows)
-    PORTC = 0;	//PC4-7 inputs w/pull-ups (columns)
+    DDRC = 0x0F;	//PC0-3 outputs, PC4-PC7 inputs
+    PORTC = 0xF;	//PC4-7 inputs w/pull-ups
 }
 
 
-typedef struct {
-    int year;	//2000-2099
-    unsigned char month; //1-12
-    unsigned char day; //1-31
-    unsigned char hour; //1-12 OR 0-24
-    unsigned char minute; //1-59
-    unsigned char second; //1-59
-} DateTime;
-
-
-bool is_leap(int y) 
-{
-    return (y % 4  == 0 && y % 100 != 0) || (y % 400 == 0);
-}
-
-
-static uint8_t days_in_month(uint8_t m, int y) 
-{
-    static const uint8_t MONTH_DAYS[12] = {
-        31, /* Jan */
-        28, /* Feb */
-        31, /* Mar */
-        30, /* Apr */
-        31, /* May */
-        30, /* Jun */
-        31, /* Jul */
-        31, /* Aug */
-        30, /* Sep */
-        31, /* Oct */
-        30, /* Nov */
-        31  /* Dec */
-    };
-
-    if (m == 2 && is_leap(y))	// feb in a leap year
-        return 29;
-    return MONTH_DAYS[m - 1];
-}
-
-
-int get_key()
+char keypad_get_key(void)
 {
     
-    
+
 }
 
 
-int is_pressed()
+/*** display current time/date ***/
+void print_display(const DateTime *dt) 
 {
-    
+    char buf[17];
+    lcd_clr(); //clear LCD
+
+    // top row: MM/DD/YYYY
+    sprintf(buf, "%02d/%02d/%04d", dt->month, dt->day, dt->year); //write it
+    lcd_pos(0,0); lcd_puts2(buf)
+   
+    // bottom row: HH:MM:SS
+    sprintf(buf, "%02d:%02d:%02d", dt->hour, dt->minute, dt->second); //write it
+    lcd_pos(1,0); lcd_puts2(buf);
 }
 
 
-int main(void)
+/*** set the date setting ***/
+
+
+
+/*** set the time setting ***/
+
+
+
+/*** demo only settings to make sure LCD works***/
+int main(void) 
 {
     avr_init();
     lcd_init();
     keypad_init();
-    
-    
+
+    //example date/time
+    DateTime now = {2025,4,30,12,0,0};
+    print_display(&now);
+
+    while (1) {
+        char k = keypad_get_key();
+
+        if      (k=='A') { set_date(&now); print_display(&now); } //A - change date setting
+        else if (k=='B') { set_time(&now); print_display(&now); } //B - change time setting
+        else if (k=='D') { show24 = !show24; print_display(&now); } //D - miltary on/off
+        else 
+        {
+            avr_wait(1000); // only tick when not entering
+            advance_dt(&now);
+            print_display(&now);
+        }
+    }
 }
