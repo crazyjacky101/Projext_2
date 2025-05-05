@@ -41,12 +41,9 @@ static uint8_t days_in_month(uint8_t m, int y)
 
 
 /*** keypad helpers ***/
-static const char MAP[4][4] = 
+static const char MAP[16] = 
 {
-    {"1","2","3","A"},
-    {"4","5","6","B"},
-    {"7","8","9","C"},
-    {"*","0","#","D"}
+    {"1","2","3","A","4","5","6","B","7","8","9","C","*","0","#","D"}
 }; 
 
 
@@ -57,10 +54,17 @@ void keypad_init(void)
 }
 
 
-char keypad_get_key(void)
+int keypad_get_key(void)
 {
-    
-
+    int i,j;
+      for(i = 0; i < 4; ++i) {
+         for(j = 0; j < 4; ++j) {
+             if(is_pressed(i,j)) {
+                   return i*4+j+1;
+             }
+         }
+         return 0;
+      }
 }
 
 
