@@ -15,6 +15,7 @@
 #define RS_PIN 0
 #define RW_PIN 1
 #define EN_PIN 2
+static uint8_t show24 = 1;  // 1 = military, 0 = AM/PM
 
 
 /*** data structures and helpers ***/
@@ -41,26 +42,33 @@ static uint8_t days_in_month(uint8_t m, int y)
 
 
 /*** keypad helpers ***/
-static const char MAP[4][4] = 
+static const char MAP[16] = 
 {
-    {"1","2","3","A"},
-    {"4","5","6","B"},
-    {"7","8","9","C"},
-    {"*","0","#","D"}
+    {"1","2","3","A","4","5","6","B","7","8","9","C","*","0","#","D"}
 }; 
 
 
 void keypad_init(void)
 {
     DDRC = 0x0F;	//PC0-3 outputs, PC4-PC7 inputs
-    PORTC = 0xF;	//PC4-7 inputs w/pull-ups
+    PORTC = 0xF0;	//PC4-7 inputs w/pull-ups
 }
 
 
-char keypad_get_key(void)
+int keypad_get_key(void)
 {
-    
-
+    int i,j;
+      for(i = 0; i < 4; ++i) 
+      {
+         for(j = 0; j < 4; ++j) 
+         {
+            if(is_pressed(i,j)) 
+            {
+                return i*4+j+1;
+            }
+         }
+         return 0;
+      }
 }
 
 
@@ -72,11 +80,21 @@ void print_display(const DateTime *dt)
 
     // top row: MM/DD/YYYY
     sprintf(buf, "%02d/%02d/%04d", dt->month, dt->day, dt->year); //write it
-    lcd_pos(0,0); lcd_puts2(buf)
-   
+
     // bottom row: HH:MM:SS
-    sprintf(buf, "%02d:%02d:%02d", dt->hour, dt->minute, dt->second); //write it
-    lcd_pos(1,0); lcd_puts2(buf);
+    if (show24) //military time ON
+    {
+        sprintf(buf, "%02d:%02d:%02d", dt->hour, dt->minute, dt->second); //write it
+    }
+    else //military time OFF have to state PM/AM
+    {
+        uint8_t h = dt->hour % 12;  //get time in 12 hour
+        if (h == 0) h = 12;
+        char ampm = (dt->hour < 12) ? 'A' : 'P';    //less than 12 = A(M)  more than 12 = P(M)
+        sprintf(buf, "%02d:%02d:%02d %cM", h, dt->minute, dt->second, ampm); //write it
+    }   
+    lcd_pos(1,0); 
+    lcd_puts2(buf);
 }
 
 
@@ -99,7 +117,8 @@ int main(void)
     DateTime now = {2025,4,30,12,0,0};
     print_display(&now);
 
-    while (1) {
+    while (1) 
+    {
         char k = keypad_get_key();
 
         if      (k=='A') { set_date(&now); print_display(&now); } //A - change date setting
