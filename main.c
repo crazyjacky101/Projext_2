@@ -41,34 +41,38 @@ static uint8_t days_in_month(uint8_t m, int y)
 }
 
 
-/*** keypad helpers ***/
-static const char MAP[16] = 
+void advance_dt(DateTime *dt)
 {
-    {"1","2","3","A","4","5","6","B","7","8","9","C","*","0","#","D"}
-}; 
+    dt->second;
+    if (dt->second == 60)
+    {
+        dt->second = 0;
+        dt->minute++;
 
+        if (dt->minute == 60)
+        {
+            dt->minute = 0;
+            dt->hour++;
 
-void keypad_init(void)
-{
-    DDRC = 0x0F;	//PC0-3 outputs, PC4-PC7 inputs
-    PORTC = 0xF0;	//PC4-7 inputs w/pull-ups
-}
-
-
-int keypad_get_key(void)
-{
-    int i,j;
-      for(i = 0; i < 4; ++i) 
-      {
-         for(j = 0; j < 4; ++j) 
-         {
-            if(is_pressed(i,j)) 
+            if (dt->hour == 24)
             {
-                return i*4+j+1;
+                dt->hour = 0;
+                dt->day++;
+
+                if (dt->day > days_in_month(dt->month, dt->year)) 
+                {
+                    dt->day = 1;
+                    dt->month++;
+
+                    if (dt->month > 12) 
+                    {
+                        dt->month = 1;
+                        dt->year++;
+                    }
+                }
             }
-         }
-         return 0;
-      }
+        }
+    }
 }
 
 
@@ -124,11 +128,11 @@ int main(void)
         if      (k=='A') { set_date(&now); print_display(&now); } //A - change date setting
         else if (k=='B') { set_time(&now); print_display(&now); } //B - change time setting
         else if (k=='D') { show24 = !show24; print_display(&now); } //D - miltary on/off
-        else 
+        else //no option chosen CLOCK MODE
         {
-            avr_wait(1000); // only tick when not entering
-            advance_dt(&now);
-            print_display(&now);
+            avr_wait(1000); // wait 1 second
+            advance_dt(&now); // increment second
+            print_display(&now); // print new second
         }
     }
 }
