@@ -42,8 +42,8 @@ static uint8_t days_in_month(uint8_t m, int y)
 
 
 void advance_dt(DateTime *dt)
-{
-    dt->second;
+{   
+    dt->second++;
     if (dt->second == 60)
     {
         dt->second = 0;
@@ -76,6 +76,51 @@ void advance_dt(DateTime *dt)
 }
 
 
+/*** keypad helpers ***/
+static const char MAP[16] = {"1","2","3","A","4","5","6","B","7","8","9","C","*","0","#","D"};
+
+
+int is_pressed(int r, int c)
+{
+    // aet all 8 GPIOs to high impedance (N/C state)
+    DDRC = 0x0F;     // PC0–PC3 = output (rows), PC4–PC7 = input (columns)
+    PORTC = 0xF0;    // pull-up resistors ON for PC4–PC7
+
+    // drive row r LOW, others HIGH
+    PORTC = ~(1 << r);  // only row r = LOW
+
+    avr_wait(1);    // small delay
+
+    // check if column c (PC4 to PC7) is LOW
+    if (!(PINC & (1 << (c + 4)))) 
+    {
+        return 1;   // button (r, c) is pressed
+    }
+
+    return 0;   // not pressed
+}
+
+
+
+int keypad_get_key(void)
+{
+    int i,j;
+      for(i = 0; i < 4; ++i) 
+      {
+         for(j = 0; j < 4; ++j) 
+         {
+             if(is_pressed(i,j)) 
+             {
+                return i*4+j+1;
+             }
+         }
+         return 0;
+      }
+}
+
+
+
+
 /*** display current time/date ***/
 void print_display(const DateTime *dt) 
 {
@@ -83,12 +128,14 @@ void print_display(const DateTime *dt)
     lcd_clr(); //clear LCD
 
     // top row: MM/DD/YYYY
-    sprintf(buf, "%02d/%02d/%04d", dt->month, dt->day, dt->year); //write it
+    sprintf(buf, "%02d/%02d/%04d", dt->month, dt->day, dt->year); // write it
+    lcd_pos(0, 0);
+    lcd_puts2(buf);
 
     // bottom row: HH:MM:SS
     if (show24) //military time ON
     {
-        sprintf(buf, "%02d:%02d:%02d", dt->hour, dt->minute, dt->second); //write it
+        sprintf(buf, "%02d:%02d:%02d", dt->hour, dt->minute, dt->second); // write it
     }
     else //military time OFF have to state PM/AM
     {
@@ -103,11 +150,50 @@ void print_display(const DateTime *dt)
 
 
 /*** set the date setting ***/
-
+void set_date(const DateTime *dt)
+{
+    char buf[8];
+    int pressed;
+    for(int i = 0; i < 8; ++i)
+    {
+        while(1)
+        {
+            pressed = keypad_get_key();
+            if(pressed)
+            {
+                break;
+            }
+        }
+        buf[i] = pressed;
+    }
+    dt->month = {MAP[buf[0]], MAP[buf[1]]};
+    dt->day = {MAP[buf[2]], MAP[buf[3]]};
+    dt->year = {MAP[buf[4]], MAP[buf[5]], MAP[buf[6]], MAP[buf[7]]};
+}
 
 
 /*** set the time setting ***/
+void set_time(const DateTime *dt)
+{
+    char buf[6];
+    int pressed;
 
+    for(int i = 0; i < 5; ++i)
+    {
+        while(1)
+        {
+            pressed = keypad_get_key();
+            if(pressed)
+            {
+                break;
+            }
+        }
+        buf[i] = pressed;
+    }
+    dt->hour = {MAP[buf[0]], MAP[buf[1]]};
+    dt->minute = {MAP[buf[2]], MAP[buf[3]]};
+    dt->second = {MAP[buf[4]], MAP[buf[5]]};
+}
 
 
 /*** demo only settings to make sure LCD works***/
@@ -123,11 +209,11 @@ int main(void)
 
     while (1) 
     {
-        char k = keypad_get_key();
+        int k = keypad_get_key();
 
-        if      (k=='A') { set_date(&now); print_display(&now); } //A - change date setting
-        else if (k=='B') { set_time(&now); print_display(&now); } //B - change time setting
-        else if (k=='D') { show24 = !show24; print_display(&now); } //D - miltary on/off
+        if      (k==4) { set_date(&now); print_display(&now); } //A - change date setting
+        else if (k==8) { set_time(&now); print_display(&now); } //B - change time setting
+        else if (k==16) { show24 = !show24; print_display(&now); } //D - miltary on/off
         else //no option chosen CLOCK MODE
         {
             avr_wait(1000); // wait 1 second
