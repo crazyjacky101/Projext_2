@@ -18,7 +18,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-static uint8_t show24 = 0;  // 1 = military, 0 = AM/PM
+static uint8_t show24 = 1;  // 1 = military, 0 = AM/PM
 #define CHAR_TO_DIGIT(c) ((c) - '0') // keypad input char -> int
 
 
@@ -246,7 +246,7 @@ int is_pressed(int r, int c)
 	PORTC = 0xF0;    // pull-up resistors ON for PC4–PC7
 
 	// drive row r LOW, others HIGH
-	PORTC = ~(1 << r);  // only row r = LOW
+	PORTC = (PORTC & 0xF0) | ((~(1 << r)) & 0x0F);
 
 	avr_wait(1);    // small delay
 
@@ -263,6 +263,13 @@ int is_pressed(int r, int c)
 
 int keypad_get_key(void)
 {
+	lcd_clr();
+	lcd_pos(0,0);
+	lcd_puts2("Keypad...");
+	avr_wait(500);
+	lcd_clr();
+	
+	
 	int i,j;
 	for(i = 0; i < 4; ++i)
 	{
@@ -270,11 +277,33 @@ int keypad_get_key(void)
 		{
 			if(is_pressed(i,j))
 			{
-				while (is_pressed(i, j)); // in case holding button
+				lcd_clr();
+				lcd_pos(0,0);
+				lcd_puts2("Being pressed...");
+				avr_wait(500);
+				lcd_clr();
+				
+				
+				while (is_pressed(i, j))
+				{
+					lcd_clr();
+					 // in case holding button
+				}
+				lcd_clr();
+				lcd_pos(0,0);
+				lcd_puts2("Returning press...");
+				avr_wait(500);
+				lcd_clr();
 				return i * 4 + j;
 			}
 		}
 	}
+	lcd_clr();
+	lcd_pos(0,0);
+	lcd_puts2("Returning -1...");
+	avr_wait(500);
+	lcd_clr();
+	
 	return -1; // not pressed
 }
 
@@ -347,48 +376,66 @@ void enter_value(char *buf, int len)
 void set_date(DateTime *dt)
 {
 	char buf[8] = {0};
-	enter_value(buf, 8);
-	
-	uint8_t month = 10 * CHAR_TO_DIGIT(buf[0]) + CHAR_TO_DIGIT(buf[1]);
-	uint8_t day =	10 * CHAR_TO_DIGIT(buf[2]) + CHAR_TO_DIGIT(buf[3]);
-	int year =	1000 * CHAR_TO_DIGIT(buf[4]) +
-				100 * CHAR_TO_DIGIT(buf[5]) +
-				10 * CHAR_TO_DIGIT(buf[6]) +
-				CHAR_TO_DIGIT(buf[7]);
-	
-	if (dt->month >= 1 && dt->month <= 12 && dt->day >= 1 && dt->day <= days_in_month(dt->month, dt->year)) 
-	{
-		dt->month = month;
-		dt->day = day;
-		dt->year = year;
-		break; // valid input!
-	}
-	else 
-	{
-		lcd_clr();
-		lcd_puts2("Invalid date.");
-		avr_wait(1000);
-		lcd_clr();
-		lcd_puts2("Try again:");
-	}
-	
-	// normalize date
-	normalize_datetime(dt);
-}
 
+	while (1) 
+	{
+		enter_value(buf, 8);
+
+		uint8_t month = 10 * CHAR_TO_DIGIT(buf[0]) + CHAR_TO_DIGIT(buf[1]);
+		uint8_t day = 10 * CHAR_TO_DIGIT(buf[2]) + CHAR_TO_DIGIT(buf[3]);
+		int year =	1000 * CHAR_TO_DIGIT(buf[4]) +
+					100 * CHAR_TO_DIGIT(buf[5]) +
+					10  * CHAR_TO_DIGIT(buf[6]) +
+					CHAR_TO_DIGIT(buf[7]);
+
+		if (month >= 1 && month <= 12 && day >= 1 && day <= days_in_month(month, year)) 
+		{
+			dt->month = month;
+			dt->day = day;
+			dt->year = year;
+			break; // valid input
+		}
+		else 
+		{
+			lcd_clr();
+			lcd_puts2("Invalid date.");
+			avr_wait(1000);
+			lcd_clr();
+			lcd_puts2("Try again:");
+		}
+	}
+}
 
 void set_time(DateTime *dt)
 {
 	char buf[6] = {0};
-	enter_value(buf, 6);
 
-	dt->hour =		10*CHAR_TO_DIGIT(buf[0]) + CHAR_TO_DIGIT(buf[1]);
-	dt->minute =	10*CHAR_TO_DIGIT(buf[2]) + CHAR_TO_DIGIT(buf[3]);
-	dt->second =	10*CHAR_TO_DIGIT(buf[4]) + CHAR_TO_DIGIT(buf[5]);
-	
-	//normalize time
-	normalize_datetime(dt);
+	while (1) 
+	{
+		enter_value(buf, 6);
+
+		uint8_t hour   = 10 * CHAR_TO_DIGIT(buf[0]) + CHAR_TO_DIGIT(buf[1]);
+		uint8_t minute = 10 * CHAR_TO_DIGIT(buf[2]) + CHAR_TO_DIGIT(buf[3]);
+		uint8_t second = 10 * CHAR_TO_DIGIT(buf[4]) + CHAR_TO_DIGIT(buf[5]);
+
+		if (hour < 24 && minute < 60 && second < 60) 
+		{
+			dt->hour = hour;
+			dt->minute = minute;
+			dt->second = second;
+			break; // input is valid
+		}
+		else 
+		{
+			lcd_clr();
+			lcd_puts2("Invalid time.");
+			avr_wait(1000);
+			lcd_clr();
+			lcd_puts2("Try again:");
+		}
+	}
 }
+
 
 
 
@@ -398,32 +445,50 @@ int main(void)
 	avr_init();
 	lcd_init();
 	keypad_init();
+	
+	lcd_clr();
+	lcd_pos(0,0);
+	lcd_puts2("Initializing...");
+	avr_wait(500);
+	lcd_clr();
+	
 
 	// preset example date/time
 	DateTime now = {2025, 5, 7, 12, 0, 0};
 	print_display(&now);
-
+		
 	while (1)
 	{
-		int k = keypad_get_key(); // non-blocking key read
-
-		if (k >= 0) {
-			char key = MAP[k];
-
-			if (key == 'A') {
-				set_date(&now);
-				print_display(&now);
-			}
-			else if (key == 'B') {
-				set_time(&now);
-				print_display(&now);
-			}
-			else if (key == 'D') {
-				show24 = !show24; // toggle military time
-				print_display(&now);
-			}
+		lcd_clr();
+		lcd_pos(0,0);
+		lcd_puts2("In loop...");
+		avr_wait(500);
+		lcd_clr();
+		
+		int k = keypad_get_key();
+		
+		lcd_clr();
+		lcd_pos(0,0);
+		lcd_puts2("Out loop...");
+		avr_wait(500);
+		lcd_clr();
+		
+		if (k >= 0) 
+		{
+			lcd_clr();
+			lcd_pos(0,0);
+			lcd_puts2("Keypad...");
+			avr_wait(500);
+			lcd_clr();
 		}
-		else {
+		else
+		{
+			lcd_clr();
+			lcd_pos(0,0);
+			lcd_puts2("No keypad...");
+			avr_wait(500);
+			lcd_clr();
+			
 			// no key pressed run clock
 			avr_wait(1000);           // wait 1 second
 			advance_dt(&now);         // increment time
